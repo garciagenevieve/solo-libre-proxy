@@ -1,1 +1,57 @@
+const { Client } = require('@notionhq/client');
+const nodemailer = require('nodemailer');
 
+const NOTION_DB_ID = '47811b442b744ef9be6fb38eedce7372';
+
+module.exports = async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS, GET');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method === 'GET') return res.status(200).json({ status: 'Solo & Libre proxy OK' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const { prenom, nom, email, cafe, date } = req.body;
+  if (!prenom || !nom || !email || !cafe || !date) {
+    return res.status(400).json({ error: 'Champs manquants' });
+  }
+
+  try {
+    const notion = new Client({ auth: process.env.NOTION_TOKEN });
+    await notion.pages.create({
+      parent: { database_id: NOTION_DB_ID },
+      properties: {
+        'Nom complet': { title: [{ text: { content: `${prenom} ${nom}` } }] },
+        'Prénom':      { rich_text: [{ text: { content: prenom } }] },
+        'Nom':         { rich_text: [{ text: { content: nom } }] },
+        'Email':       { email: email },
+        'Café':        { select: { name: cafe } },
+        'Date du café':{ date: { start: date } }
+      }
+    });
+
+    const dateFormatee = new Date(date).toLocaleDateString('fr-FR', {
+      day: 'numeric', month: 'long', year: 'numeric'
+    });
+
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.hostinger.com',
+      port: 587,
+      secure: false,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+    });
+
+    await transporter.sendMail({
+      from: `"Solo & Libre" <${process.env.SMTP_USER}>`,
+      to: email,
+      subject: 'Bienvenue dans Solo & Libre - Votre charte est signee !',
+      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#FAF7F2;"><div style="background:#3D1E4A;padding:40px 32px;text-align:center;"><h1 style="font-family:Georgia,serif;font-size:28px;color:#ffffff;font-weight:600;margin:0;">Bienvenue dans Solo &amp; Libre</h1></div><div style="padding:36px 32px;"><p style="font-size:16px;color:#2C1810;line-height:1.7;">Bonjour <strong>${prenom}</strong>,</p><p style="font-size:16px;color:#2C1810;line-height:1.7;">Votre signature de la Charte a bien ete enregistree lors du <strong>${cafe}</strong> du <strong>${dateFormatee}</strong>.</p><div style="background:#F5E9C8;border-radius:12px;padding:20px 24px;margin:24px 0;"><p style="font-family:Georgia,serif;font-style:italic;font-size:17px;color:#3D1E4A;margin:0;text-align:center;">Solo ne signifie pas seule. Libre ne signifie pas sans filet.</p></div><p style="font-size:16px;color:#2C1810;line-height:1.7;">A tres bientot,<br><strong>Genevieve Garcia</strong><br>Fondatrice de Solo &amp; Libre</p></div><div style="background:#3D1E4A;padding:20px 32px;text-align:center;"><p style="font-size:12px;color:rgba(255,255,255,0.4);margin:0;">genevievegarcia.fr</p></div></div>`
+    });
+
+    res.status(200).json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+};
