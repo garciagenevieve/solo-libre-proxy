@@ -1,10 +1,5 @@
 {
   "version": 2,
-  "name": "solo-libre-proxy",
-  "functions": {
-    "api/chat.js": {
-      "memory": 128,
-      "maxDuration": 15
-    }
-  }
+  "builds": [{ "src": "api/index.js", "use": "@vercel/node" }],
+  "routes": [{ "src": "/(.*)", "dest": "api/index.js" }]
 }
