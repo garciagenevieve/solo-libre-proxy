@@ -1,0 +1,98 @@
+const express = require('express');
+const nodemailer = require('nodemailer');
+const { Client } = require('@notionhq/client');
+const cors = require('cors');
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// ===== CONFIG =====
+const NOTION_TOKEN = process.env.NOTION_TOKEN;
+const NOTION_DB_ID = '47811b442b744ef9be6fb38eedce7372';
+const SMTP_HOST = 'smtp.hostinger.com';
+const SMTP_PORT = 587;
+const SMTP_USER = process.env.SMTP_USER;
+const SMTP_PASS = process.env.SMTP_PASS;
+
+// ===== NOTION =====
+const notion = new Client({ auth: NOTION_TOKEN });
+
+async function ajouterSignataire(data) {
+  const { prenom, nom, email, cafe, date } = data;
+  await notion.pages.create({
+    parent: { database_id: NOTION_DB_ID },
+    properties: {
+      'Nom complet': { title: [{ text: { content: `${prenom} ${nom}` } }] },
+      'Prénom':      { rich_text: [{ text: { content: prenom } }] },
+      'Nom':         { rich_text: [{ text: { content: nom } }] },
+      'Email':       { email: email },
+      'Café':        { select: { name: cafe } },
+      'Date du café':{ date: { start: date } }
+    }
+  });
+}
+
+// ===== EMAIL =====
+const transporter = nodemailer.createTransport({
+  host: SMTP_HOST,
+  port: SMTP_PORT,
+  secure: false,
+  auth: { user: SMTP_USER, pass: SMTP_PASS }
+});
+
+async function envoyerEmail(data) {
+  const { prenom, nom, email, cafe, date } = data;
+  const dateFormatee = new Date(date).toLocaleDateString('fr-FR', {
+    day: 'numeric', month: 'long', year: 'numeric'
+  });
+
+  await transporter.sendMail({
+    from: `"Solo & Libre" <${SMTP_USER}>`,
+    to: email,
+    subject: 'Bienvenue dans Solo & Libre ✦ Votre charte est signée !',
+    html: `
+<div style="font-family:'Lato',Arial,sans-serif;max-width:600px;margin:0 auto;background:#FAF7F2;">
+  <div style="background:#3D1E4A;padding:40px 32px;text-align:center;">
+    <p style="font-size:0.65rem;letter-spacing:0.25em;text-transform:uppercase;color:#C9A84C;margin-bottom:12px;">Solo & Libre</p>
+    <h1 style="font-family:Georgia,serif;font-size:1.8rem;color:#ffffff;font-weight:600;margin:0;line-height:1.2;">Bienvenue dans<br><em style="color:#C9A84C;">Solo & Libre</em></h1>
+  </div>
+  <div style="padding:36px 32px;">
+    <p style="font-size:1rem;color:#2C1810;line-height:1.7;">Bonjour <strong>${prenom}</strong>,</p>
+    <p style="font-size:1rem;color:#2C1810;line-height:1.7;">Votre signature de la <strong>Charte de la Soloentrepreneuse</strong> a bien été enregistrée lors du <strong>${cafe}</strong> du <strong>${dateFormatee}</strong>.</p>
+    <p style="font-size:1rem;color:#2C1810;line-height:1.7;">En signant cette charte, vous rejoignez un collectif de femmes qui entreprennent, partagent et grandissent ensemble.</p>
+    <div style="background:#F5E9C8;border-radius:12px;padding:20px 24px;margin:24px 0;">
+      <p style="font-family:Georgia,serif;font-style:italic;font-size:1.05rem;color:#3D1E4A;margin:0;text-align:center;">"Solo ne signifie pas seule.<br>Libre ne signifie pas sans filet."</p>
+    </div>
+    <p style="font-size:1rem;color:#2C1810;line-height:1.7;">Retrouvez la charte complète et toutes les actualités du collectif sur <a href="https://genevievegarcia.fr" style="color:#5C2D6E;font-weight:700;">genevievegarcia.fr</a></p>
+    <p style="font-size:1rem;color:#2C1810;line-height:1.7;">À très bientôt,<br><strong style="color:#3D1E4A;">Geneviève Garcia</strong><br><span style="font-size:0.85rem;color:#6B5344;">Fondatrice de Solo & Libre</span></p>
+  </div>
+  <div style="background:#3D1E4A;padding:20px 32px;text-align:center;">
+    <p style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin:0;">Solo & Libre · genevievegarcia.fr</p>
+  </div>
+</div>`
+  });
+}
+
+// ===== ROUTE =====
+app.post('/signer', async (req, res) => {
+  const { prenom, nom, email, cafe, date } = req.body;
+
+  if (!prenom || !nom || !email || !cafe || !date) {
+    return res.status(400).json({ error: 'Champs manquants' });
+  }
+
+  try {
+    await ajouterSignataire(req.body);
+    await envoyerEmail(req.body);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/', (req, res) => res.json({ status: 'Solo & Libre proxy OK' }));
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Serveur démarré sur le port ${PORT}`));
