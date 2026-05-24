@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "name": "solo-libre-proxy",
+  "functions": {
+    "api/chat.js": {
+      "memory": 128,
+      "maxDuration": 15
+    }
+  }
+}
