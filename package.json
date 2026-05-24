@@ -1,6 +1,10 @@
 {
   "name": "solo-libre-proxy",
   "version": "1.0.0",
+  "main": "api/index.js",
+  "scripts": {
+    "start": "node api/index.js"
+  },
   "dependencies": {
     "@notionhq/client": "^2.2.15",
     "nodemailer": "^6.9.13"
